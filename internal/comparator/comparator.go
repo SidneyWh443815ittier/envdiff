@@ -1,46 +1,52 @@
 package comparator
 
-// Result holds the outcome of comparing two env maps.
-type Result struct {
-	Missing  []string          // keys present in base but absent in target
-	Extra    []string          // keys present in target but absent in base
-	Mismatch map[string]Diff   // keys present in both but with different values
-}
-
-// Diff captures the differing values for a single key.
-type Diff struct {
+// Mismatch holds the base and target values for a key that exists in both
+// environments but with differing values.
+type Mismatch struct {
 	Base   string
 	Target string
 }
 
-// Compare compares a base env map against a target env map and returns a
-// Result describing missing keys, extra keys, and value mismatches.
+// Result holds the outcome of comparing two environment maps.
+type Result struct {
+	// Missing contains keys present in base but absent in target.
+	Missing map[string]string
+	// Extra contains keys present in target but absent in base.
+	Extra map[string]string
+	// Mismatched contains keys present in both but with different values.
+	Mismatched map[string]Mismatch
+}
+
+// IsClean returns true when there are no differences between the two env maps.
+func (r Result) IsClean() bool {
+	return len(r.Missing) == 0 && len(r.Extra) == 0 && len(r.Mismatched) == 0
+}
+
+// Compare compares base and target environment maps and returns a Result
+// describing any differences found.
 func Compare(base, target map[string]string) Result {
 	result := Result{
-		Mismatch: make(map[string]Diff),
+		Missing:    make(map[string]string),
+		Extra:      make(map[string]string),
+		Mismatched: make(map[string]Mismatch),
 	}
 
-	for key, baseVal := range base {
-		targetVal, ok := target[key]
+	for k, baseVal := range base {
+		targetVal, ok := target[k]
 		if !ok {
-			result.Missing = append(result.Missing, key)
+			result.Missing[k] = baseVal
 			continue
 		}
 		if baseVal != targetVal {
-			result.Mismatch[key] = Diff{Base: baseVal, Target: targetVal}
+			result.Mismatched[k] = Mismatch{Base: baseVal, Target: targetVal}
 		}
 	}
 
-	for key := range target {
-		if _, ok := base[key]; !ok {
-			result.Extra = append(result.Extra, key)
+	for k, targetVal := range target {
+		if _, ok := base[k]; !ok {
+			result.Extra[k] = targetVal
 		}
 	}
 
 	return result
-}
-
-// HasDiff returns true when any differences were found.
-func (r Result) HasDiff() bool {
-	return len(r.Missing) > 0 || len(r.Extra) > 0 || len(r.Mismatch) > 0
 }
