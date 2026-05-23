@@ -91,3 +91,36 @@ func TestWatcher_StartMissingFile(t *testing.T) {
 		t.Error("expected error for missing file")
 	}
 }
+
+func TestWatcher_MultipleFiles(t *testing.T) {
+	p1 := writeTempEnv(t, "KEY1=value1\n")
+	p2 := writeTempEnv(t, "KEY2=value2\n")
+
+	var called atomic.Int32
+	opts := watcher.Options{
+		PollInterval: 50 * time.Millisecond,
+		OnChange:     func(_ string) { called.Add(1) },
+	}
+
+	w := watcher.New([]string{p1, p2}, opts)
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() error: %v", err)
+	}
+	defer w.Stop()
+
+	time.Sleep(80 * time.Millisecond)
+
+	// Modify both files and expect two change events.
+	if err := os.WriteFile(p1, []byte("KEY1=changed\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p2, []byte("KEY2=changed\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+
+	if n := called.Load(); n < 2 {
+		t.Errorf("expected at least 2 change events for 2 modified files, got %d", n)
+	}
+}
