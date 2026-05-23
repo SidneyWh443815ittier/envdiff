@@ -1,52 +1,45 @@
 package comparator
 
-// Mismatch holds the base and target values for a key that exists in both
-// environments but with differing values.
-type Mismatch struct {
-	Base   string
-	Target string
+// ValuePair holds the base and comparison values for a mismatched key.
+type ValuePair struct {
+	Base string
+	Comp string
 }
 
-// Result holds the outcome of comparing two environment maps.
+// Result contains the full diff between two env maps.
 type Result struct {
-	// Missing contains keys present in base but absent in target.
-	Missing map[string]string
-	// Extra contains keys present in target but absent in base.
-	Extra map[string]string
-	// Mismatched contains keys present in both but with different values.
-	Mismatched map[string]Mismatch
+	// Missing keys are present in base but absent in comp.
+	Missing []string
+	// Extra keys are present in comp but absent in base.
+	Extra []string
+	// Mismatched keys exist in both but have different values.
+	Mismatched map[string]ValuePair
 }
 
-// IsClean returns true when there are no differences between the two env maps.
-func (r Result) IsClean() bool {
+// Clean returns true when there are no differences.
+func (r Result) Clean() bool {
 	return len(r.Missing) == 0 && len(r.Extra) == 0 && len(r.Mismatched) == 0
 }
 
-// Compare compares base and target environment maps and returns a Result
-// describing any differences found.
-func Compare(base, target map[string]string) Result {
-	result := Result{
-		Missing:    make(map[string]string),
-		Extra:      make(map[string]string),
-		Mismatched: make(map[string]Mismatch),
+// Compare diffs base against comp and returns a Result.
+func Compare(base, comp map[string]string) Result {
+	r := Result{
+		Mismatched: make(map[string]ValuePair),
 	}
 
-	for k, baseVal := range base {
-		targetVal, ok := target[k]
-		if !ok {
-			result.Missing[k] = baseVal
-			continue
-		}
-		if baseVal != targetVal {
-			result.Mismatched[k] = Mismatch{Base: baseVal, Target: targetVal}
+	for k, bv := range base {
+		if cv, ok := comp[k]; !ok {
+			r.Missing = append(r.Missing, k)
+		} else if bv != cv {
+			r.Mismatched[k] = ValuePair{Base: bv, Comp: cv}
 		}
 	}
 
-	for k, targetVal := range target {
+	for k := range comp {
 		if _, ok := base[k]; !ok {
-			result.Extra[k] = targetVal
+			r.Extra = append(r.Extra, k)
 		}
 	}
 
-	return result
+	return r
 }
