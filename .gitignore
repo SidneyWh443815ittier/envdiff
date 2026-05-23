@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+build/
+.tox/
+env/
+.env
+dist/
+htmlcov/
+.DS_Store
+.Python
+.coverage
+venv/
+*~
+Desktop.ini
