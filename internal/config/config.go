@@ -1,67 +1,69 @@
 package config
 
 import (
+	"errors"
 	"flag"
-	"fmt"
-	"os"
 	"strings"
+
+	"github.com/user/envdiff/internal/output"
 )
 
-// Config holds all CLI configuration parsed from flags and arguments.
+// Config holds the parsed CLI configuration.
 type Config struct {
-	BaseFile   string
-	CompFiles  []string
-	Prefix     string
-	IgnoreKeys []string
-	Quiet      bool
-	FailOnDiff bool
-	JSONOutput bool
+	BaseFile    string
+	CompFiles   []string
+	IgnoreKeys  []string
+	Prefix      string
+	Format      output.Format
+	FailOnDiff  bool
 }
 
-// Parse parses command-line arguments and returns a Config.
-// It returns an error if required arguments are missing.
+type multiString []string
+
+func (m *multiString) String() string  { return strings.Join(*m, ",") }
+func (m *multiString) Set(v string) error { *m = append(*m, v); return nil }
+
+// Parse parses os.Args-style arguments and returns a Config.
 func Parse(args []string) (*Config, error) {
 	fs := flag.NewFlagSet("envdiff", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
 
-	var prefix string
-	var ignoreRaw string
-	var quiet bool
-	var failOnDiff bool
-	var jsonOutput bool
+	var compFiles multiString
+	var ignoreKeys multiString
+	prefix := fs.String("prefix", "", "Only compare keys with this prefix")
+	format := fs.String("format", "text", "Output format: text, json, markdown")
+	failOnDiff := fs.Bool("fail", false, "Exit with non-zero code if differences found")
 
-	fs.StringVar(&prefix, "prefix", "", "Only compare keys with this prefix")
-	fs.StringVar(&ignoreRaw, "ignore", "", "Comma-separated list of keys to ignore")
-	fs.BoolVar(&quiet, "quiet", false, "Suppress output, only use exit code")
-	fs.BoolVar(&failOnDiff, "fail", false, "Exit with non-zero code if any diff is found")
-	fs.BoolVar(&jsonOutput, "json", false, "Output results as JSON")
+	fs.Var(&compFiles, "comp", "Comparison .env file (repeatable)")
+	fs.Var(&ignoreKeys, "ignore", "Key to ignore (repeatable)")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
 
 	remaining := fs.Args()
-	if len(remaining) < 2 {
-		return nil, fmt.Errorf("usage: envdiff [flags] <base.env> <compare.env> [compare2.env ...]")
+	if len(remaining) < 1 {
+		return nil, errors.New("usage: envdiff [flags] <base.env> [comp.env ...]")
 	}
 
-	var ignoreKeys []string
-	if ignoreRaw != "" {
-		for _, k := range strings.Split(ignoreRaw, ",") {
-			trimmed := strings.TrimSpace(k)
-			if trimmed != "" {
-				ignoreKeys = append(ignoreKeys, trimmed)
-			}
+	base := remaining[0]
+	if len(compFiles) == 0 {
+		if len(remaining) < 2 {
+			return nil, errors.New("at least one comparison file is required")
 		}
+		compFiles = append(compFiles, remaining[1:]...)
+	}
+
+	fmt := output.Format(*format)
+	if fmt != output.FormatText && fmt != output.FormatJSON && fmt != output.FormatMarkdown {
+		return nil, errors.New("invalid format: must be text, json, or markdown")
 	}
 
 	return &Config{
-		BaseFile:   remaining[0],
-		CompFiles:  remaining[1:],
-		Prefix:     prefix,
-		IgnoreKeys: ignoreKeys,
-		Quiet:      quiet,
-		FailOnDiff: failOnDiff,
-		JSONOutput: jsonOutput,
+		BaseFile:   base,
+		CompFiles:  []string(compFiles),
+		IgnoreKeys: []string(ignoreKeys),
+		Prefix:     *prefix,
+		Format:     fmt,
+		FailOnDiff: *failOnDiff,
 	}, nil
 }
