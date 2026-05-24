@@ -28,6 +28,21 @@ func (m *Manager) LoadNamed(name string) (Snapshot, error) {
 	return Load(m.pathFor(name))
 }
 
+// Compare loads two named snapshots and returns the drift report between them.
+// prev is the baseline snapshot name and curr is the name of the snapshot to
+// compare against it.
+func (m *Manager) Compare(prev, curr string) (DriftReport, error) {
+	prevSnap, err := m.LoadNamed(prev)
+	if err != nil {
+		return DriftReport{}, fmt.Errorf("loading previous snapshot %q: %w", prev, err)
+	}
+	currSnap, err := m.LoadNamed(curr)
+	if err != nil {
+		return DriftReport{}, fmt.Errorf("loading current snapshot %q: %w", curr, err)
+	}
+	return Diff(prevSnap, currSnap), nil
+}
+
 // WriteReport writes a human-readable drift report to w.
 func WriteReport(w io.Writer, prev, curr Snapshot, report DriftReport) {
 	fmt.Fprintf(w, "Snapshot drift report\n")
